@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>面包电影院</title>
+    <meta name="referrer" content="no-referrer">
+    
+    <script src="/static/tailwind.js"></script>
+    <script src="/static/vue.js"></script>
+    
+    <style>
+        body { background-color: #000000; color: #e5e7eb; font-family: system-ui, -apple-system, sans-serif; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1a1a1a; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 2px; }
+        
+        .btn-primary { background: linear-gradient(to bottom, #e50914, #b00710); color: white; border: none; }
+        .btn-primary:hover { filter: brightness(1.1); }
+
+        .cat-btn { padding: 6px 16px; border-radius: 4px; font-size: 13px; cursor: pointer; white-space: nowrap; color: #9ca3af; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); transition: all 0.2s; }
+        .cat-btn:hover { background: rgba(255,255,255,0.1); color: white; border-color: white; }
+        .cat-btn.active { background: #e50914; color: white; border-color: #e50914; font-weight: bold; }
+
+        .poster-card { transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .poster-card:hover { transform: scale(1.05); z-index: 10; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+
+        .hero-bg {
+            position: absolute; inset: 0; 
+            background-size: cover; background-position: center;
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.1) 100%);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.1) 100%);
+            opacity: 0.5; filter: blur(40px) saturate(1.2); z-index: 0;
+            transition: background-image 0.5s ease-in-out;
+        }
+
+        .ep-btn { background: #262626; color: #a3a3a3; transition: all 0.2s; border: 1px solid transparent; }
+        .ep-btn:hover { background: #404040; color: white; }
+        .ep-btn.active { background: #e50914; color: white; font-weight: bold; box-shadow: 0 0 10px rgba(229, 9, 20, 0.4); }
+
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.5s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .animate-slide-in { animation: slideInRight 0.8s ease-out forwards; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="min-h-screen flex flex-col relative overflow-x-hidden">
+
+    <header class="fixed top-0 w-full z-50 transition-all duration-300 bg-gradient-to-b from-black/90 to-transparent">
+        <div class="container mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-1 cursor-pointer" @click="resetHome">
+                <div class="text-2xl font-black text-[#e50914] tracking-tighter drop-shadow-md">BREAD<span class="text-white">CINEMA</span></div>
+            </div>
+            
+            <div class="relative group">
+                <input v-model="searchKeyword" @keyup.enter="doSearch" type="text" placeholder="搜索影片..." 
+                    class="bg-black/40 backdrop-blur-md border border-gray-600 text-sm rounded-none pl-3 pr-8 py-1.5 w-32 focus:w-64 transition-all outline-none text-white focus:border-red-600 focus:bg-black/80">
+                <button @click="doSearch" class="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-600 transition-colors cursor-pointer">
+                    🔍
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="relative w-full h-[65vh] mb-4 group" @mouseenter="stopCarousel" @mouseleave="startCarousel">
+        <transition-group name="fade">
+            <div v-for="(hero, index) in heroVideos" :key="hero.id" v-show="index === currentHeroIndex" class="absolute inset-0 flex items-center">
+                <div class="hero-bg" :style="`background-image: url(${getImg(hero.pic)})`"></div>
+                <div class="container mx-auto px-6 z-10 flex flex-row items-center justify-between h-full pt-16 pb-10">
+                    <div class="flex-1 pr-10 animate-slide-in">
+                        <span class="text-[#e50914] font-bold tracking-widest text-xs mb-2 block animate-pulse">🔥 重磅热播</span>
+                        <h1 class="text-5xl md:text-7xl font-black text-white drop-shadow-2xl max-w-3xl leading-tight mb-4 line-clamp-2">{{ hero.title }}</h1>
+                        <div class="flex items-center gap-4 text-sm text-gray-200 mb-6 font-medium shadow-black drop-shadow-md">
+                            <span class="bg-white/20 px-2 py-0.5 rounded border border-white/10">{{ hero.category }}</span>
+                            <span>{{ hero.year }}</span>
+                            <span class="text-green-400">{{ hero.remarks }}</span>
+                        </div>
+                        <div class="flex gap-4">
+                            <button @click="openDetail(hero.id)" class="btn-primary px-8 py-3 rounded text-lg font-bold flex items-center gap-2 shadow-lg hover:scale-105 transform transition">
+                                <span>▶ 立即播放</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="hidden md:block w-[260px] aspect-[2/3] shrink-0 rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/20 z-20 animate-slide-in transform rotate-2 hover:rotate-0 transition duration-500">
+                        <img :src="getImg(hero.pic)" class="w-full h-full object-cover">
+                    </div>
+                </div>
+            </div>
+        </transition-group>
+        
+        <button @click="prevHero" class="absolute left-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/60 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20">❮</button>
+        <button @click="nextHero" class="absolute right-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/60 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20">❯</button>
+        <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+            <button v-for="(hero, index) in heroVideos" :key="'dot-'+index" @click="switchHero(index)" :class="['w-2 h-2 rounded-full transition-all', index === currentHeroIndex ? 'bg-[#e50914] w-6' : 'bg-gray-400 hover:bg-white']"></button>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-6 mb-6 relative z-20">
+        <div class="flex gap-3 overflow-x-auto hide-scrollbar py-2">
+            <button :class="['cat-btn', currentCategoryId===''?'active':'']" @click="changeCategory('')">全部资源</button>
+            <button v-for="c in categories" :key="c.type_id" :class="['cat-btn', currentCategoryId==c.type_id?'active':'']" @click="changeCategory(c.type_id)">{{c.type_name}}</button>
+        </div>
+    </div>
+
+    <main class="container mx-auto px-6 pb-20 z-20 relative min-h-[500px]">
+        <h3 class="text-xl font-bold text-white mb-4 border-l-4 border-red-600 pl-3">最新更新</h3>
+        <div v-if="loading" class="text-center py-20 text-gray-500 animate-pulse">正在同步资源库...</div>
+        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-8">
+            <div v-for="video in filteredVideos" :key="video.id" class="group cursor-pointer" @click="openDetail(video.id)">
+                <div class="poster-card relative aspect-[2/3] rounded-md bg-[#1a1a1a] overflow-hidden mb-3 ring-1 ring-white/10">
+                    <img :src="getImg(video.pic)" class="w-full h-full object-cover" loading="lazy" onerror="this.style.display='none'">
+                    <div class="absolute top-1 right-1 bg-red-600/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">{{ video.remarks }}</div>
+                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div class="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center shadow-xl scale-90 group-hover:scale-110 transition"><span class="text-white font-bold ml-1 text-xl">▶</span></div>
+                    </div>
+                </div>
+                <h3 class="text-gray-300 text-sm group-hover:text-white transition truncate font-medium">{{ video.title }}</h3>
+                <p class="text-xs text-gray-500 truncate">{{ video.year }} · {{ video.area }}</p>
+            </div>
+        </div>
+        <div class="flex justify-center mt-12 gap-4 pb-10">
+            <button @click="changePage(-1)" :disabled="currentPage<=1" class="px-5 py-2 bg-[#1a1a1a] border border-gray-700 hover:border-gray-500 rounded disabled:opacity-30 text-sm transition">上一页</button>
+            <span class="px-4 py-2 text-red-600 font-bold bg-[#1a1a1a] border border-gray-700 rounded">{{ currentPage }}</span>
+            <button @click="changePage(1)" class="px-5 py-2 bg-[#1a1a1a] border border-gray-700 hover:border-gray-500 rounded text-sm transition">下一页</button>
+        </div>
+    </main>
+
+    <div v-if="currentVideoDetail" class="fixed inset-0 z-[100] bg-black flex animate-fade-in">
+        <div class="flex-1 flex flex-col relative bg-black">
+            <div class="absolute top-0 w-full p-4 z-20 flex items-center justify-between pointer-events-none">
+                <div class="flex items-center gap-4 pointer-events-auto">
+                    <button @click="closeDetail" class="w-10 h-10 rounded-full bg-black/50 hover:bg-white/20 backdrop-blur flex items-center justify-center text-white transition font-bold">←</button>
+                    <h2 class="text-white font-bold text-lg shadow-black drop-shadow-md">{{ currentVideoDetail.title }}</h2>
+                </div>
+                <button @click="toggleLine" class="pointer-events-auto bg-red-600/80 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded backdrop-blur transition shadow-lg">
+                    换线路 ({{ currentLineName }})
+                </button>
+            </div>
+            <div class="flex-1 w-full h-full relative bg-black">
+                <iframe :src="currentPlayUrl" class="w-full h-full border-0" allowfullscreen allow="autoplay; encrypted-media" referrerpolicy="no-referrer"></iframe>
+            </div>
+        </div>
+        <div class="w-80 bg-[#121212] border-l border-[#262626] flex flex-col h-full shrink-0 shadow-2xl z-30">
+            <div class="p-5 border-b border-[#262626] bg-[#161616]">
+                <h3 class="text-white font-bold">选集列表</h3>
+                <p class="text-xs text-red-500 mt-1 font-medium">正在播放: {{ currentVideoDetail.episodes[currentEpisodeIndex]?.name }}</p>
+            </div>
+            <div class="flex-1 overflow-y-auto p-3 custom-scrollbar content-start">
+                <div class="grid grid-cols-3 gap-2">
+                    <button v-for="(ep, idx) in currentVideoDetail.episodes" :key="idx" @click="playEpisode(ep.url, idx)" :class="['ep-btn text-xs py-3 rounded truncate font-medium', currentEpisodeIndex===idx ? 'active' : '']">{{ ep.name }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, watch, onUnmounted } = Vue;
+    createApp({
+        setup() {
+            const categories = ref([]); const rawVideos = ref([]);
+            const loading = ref(false); 
+            const currentPage = ref(1); const currentCategoryId = ref(""); const searchKeyword = ref("");
+            const currentVideoDetail = ref(null); const currentEpisodeIndex = ref(0);
+            
+            const getImg = (url) => {
+                if (!url) return '';
+                if (url.includes('weserv.nl')) return url;
+                return `https://images.weserv.nl/?url=${encodeURIComponent(url)}`;
+            };
+
+            const lines = [
+                { name: "咸鱼解析(极速)", url: "https://jx.xyflv.cc/?url=" },
+                { name: "JY解析(纯净)", url: "https://jx.playerjy.com/?url=" },
+                { name: "777解析(稳定)", url: "https://jx.jsonplayer.com/player/?url=" },
+                { name: "M3U8解析(备用)", url: "https://jx.m3u8.tv/jiexi/?url=" }
+            ];
+            
+            const currentLineIndex = ref(0);
+            const rawPlayUrl = ref("");
+            const currentPlayUrl = computed(() => lines[currentLineIndex.value].url + rawPlayUrl.value);
+            const currentLineName = computed(() => lines[currentLineIndex.value].name);
+            const toggleLine = () => { currentLineIndex.value = (currentLineIndex.value + 1) % lines.length; };
+
+            const currentHeroIndex = ref(0);
+            let carouselTimer = null;
+            const heroVideos = computed(() => rawVideos.value.slice(0, 5));
+            const startCarousel = () => { stopCarousel(); if (heroVideos.value.length > 1) { carouselTimer = setInterval(() => { currentHeroIndex.value = (currentHeroIndex.value + 1) % heroVideos.value.length; }, 5000); } };
+            const stopCarousel = () => { if (carouselTimer) clearInterval(carouselTimer); };
+            const prevHero = () => { stopCarousel(); currentHeroIndex.value = (currentHeroIndex.value - 1 + heroVideos.value.length) % heroVideos.value.length; startCarousel(); };
+            const nextHero = () => { stopCarousel(); currentHeroIndex.value = (currentHeroIndex.value + 1) % heroVideos.value.length; startCarousel(); };
+            const switchHero = (index) => { stopCarousel(); currentHeroIndex.value = index; startCarousel(); }
+            
+            watch(heroVideos, (newVal) => { if (newVal.length > 0) { currentHeroIndex.value = 0; startCarousel(); } });
+            onUnmounted(() => stopCarousel());
+
+            const fetchCategories = async () => { try { const r=await fetch('/api/categories'); const j=await r.json(); if(j.code===200) categories.value=j.data; } catch(e){} };
+            const loadData = async () => {
+                loading.value = true;
+                try {
+                    let url = `/api/videos?page=${currentPage.value}`;
+                    if(currentCategoryId.value) url += `&t=${currentCategoryId.value}`;
+                    if(searchKeyword.value) url += `&wd=${searchKeyword.value}`;
+                    const r=await fetch(url); const j=await r.json();
+                    rawVideos.value = (j.code===200) ? j.data : [];
+                } catch(e){ rawVideos.value=[]; } finally { loading.value=false; }
+            };
+            const openDetail = async (id) => {
+                const r=await fetch(`/api/video_detail?id=${id}`); const j=await r.json();
+                if(j.code===200) { currentVideoDetail.value=j.data; if(j.data.episodes.length>0) playEpisode(j.data.episodes[0].url, 0); }
+            };
+            
+            const filteredVideos = computed(() => rawVideos.value);
+            const playEpisode = (url, idx) => { currentEpisodeIndex.value=idx; rawPlayUrl.value=url; };
+            const changeCategory = (id) => { currentCategoryId.value=id; currentPage.value=1; loadData(); };
+            const changePage = (step) => { currentPage.value+=step; loadData(); window.scrollTo(0,0); };
+            const doSearch = () => { currentCategoryId.value=""; currentPage.value=1; loadData(); };
+            const resetHome = () => { searchKeyword.value=""; doSearch(); };
+            const closeDetail = () => { currentVideoDetail.value=null; rawPlayUrl.value=""; };
+
+            onMounted(() => { fetchCategories(); loadData(); });
+
+            return { categories, filteredVideos, heroVideos, loading, currentPage, currentCategoryId, searchKeyword, currentVideoDetail, currentEpisodeIndex, currentPlayUrl, currentLineName, toggleLine, getImg, changeCategory, changePage, doSearch, resetHome, openDetail, closeDetail, playEpisode, currentHeroIndex, prevHero, nextHero, switchHero, stopCarousel, startCarousel };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
